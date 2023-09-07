@@ -10,8 +10,8 @@
 
 namespace ImGuiEx
 {
-    Window::Window(const std::string& title, uint32_t width, uint32_t height)
-        : m_title(title), m_width(width), m_height(height)
+    Window::Window(const std::string& title, uint32_t width, uint32_t height, bool viewports, bool docking)
+        : m_title(title), m_width(width), m_height(height), m_viewports(viewports), m_docking(docking)
     {
         glfwInit();
 
@@ -24,6 +24,9 @@ namespace ImGuiEx
         {
             initGL = true;
             gladLoadGL(glfwGetProcAddress);
+
+            Viewport(0, 0, GetWidth(), GetHeight());
+            Clear(0.3f, 0.3f, 0.3f, 0.3f);
         }
 
         m_lastTime = GetTime();
@@ -43,8 +46,13 @@ namespace ImGuiEx
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO(); (void)io;
 
-        //io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-        //io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+
+        if (m_viewports)
+            io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+        if (m_docking)
+            io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
         ImGui::StyleColorsClassic();
 
@@ -91,10 +99,16 @@ namespace ImGuiEx
             io.DisplaySize = ImVec2(static_cast<float>(GetWidth()), static_cast<float>(GetHeight()));
 
             ImGui::Render();
-            glViewport(0, 0, static_cast<int>(GetWidth()), static_cast<int>(GetHeight()));
-            glClearColor(0.3f, 0.3f, 0.3f, 0.3f);
-            glClear(GL_COLOR_BUFFER_BIT);
+
+            Viewport(0, 0, GetWidth(), GetHeight());
+            Clear(0.3f, 0.3f, 0.3f, 0.3f);
+
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+            if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
+            {
+                // Some useful stuff here
+            }
 
             if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
             {
@@ -112,6 +126,9 @@ namespace ImGuiEx
             SwapBuffers();
         }
 
+        for (auto& layer : m_layers)
+            layer->OnDetach();
+
         return true;
     }
 
@@ -128,11 +145,13 @@ namespace ImGuiEx
         io.DisplaySize = ImVec2(static_cast<float>(GetWidth()), static_cast<float>(GetHeight()));
         
         ImGui::Render();
-        glViewport(0, 0, static_cast<int>(GetWidth()), static_cast<int>(GetHeight()));
-        glClearColor(0.3f, 0.3f, 0.3f, 0.3f);
-        glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         
+        if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
+        {
+            // Some useful stuff here
+        }
+
         if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
         {
             GLFWwindow* backup = glfwGetCurrentContext();
@@ -151,6 +170,17 @@ namespace ImGuiEx
     void Window::Close()
     {
         m_running = false;
+    }
+
+    void Window::Viewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height)
+    {
+        glViewport(x, y, static_cast<int>(width), static_cast<int>(height));
+    }
+
+    void Window::Clear(float r, float g, float b, float a)
+    {
+        glClearColor(r, g, b, a);
+        glClear(GL_COLOR_BUFFER_BIT);
     }
 
     bool Window::ShouldClose()
@@ -258,46 +288,58 @@ namespace ImGuiEx
 
     void OnKeyCallbackWrapper(GLFWwindow* window, int key, int scancode, int action, int mods)
     {
-        Window* current = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
-
-        for (auto& callback : current->m_keyCallbacks)
+        if (!ImGui::GetIO().WantCaptureKeyboard)
         {
-            callback(static_cast<KeyCode>(key), static_cast<Action>(action), static_cast<Modifier>(mods));
+            Window* current = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
+
+            for (auto& callback : current->m_keyCallbacks)
+            {
+                callback(static_cast<KeyCode>(key), static_cast<Action>(action), static_cast<Modifier>(mods));
+            }
         }
     }
 
     void OnMouseCallbackWrapper(GLFWwindow* window, int button, int action, int mods)
     {
-        Window* current = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
-
-        for (auto& callback : current->m_mouseCallbacks)
+        if (!ImGui::GetIO().WantCaptureMouse)
         {
-            double xpos, ypos;
-            glfwGetCursorPos(window, &xpos, &ypos);
+            Window* current = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
 
-            callback(static_cast<ButtonCode>(button), static_cast<Action>(action), static_cast<Modifier>(mods), xpos, current->m_height - ypos - 1.0);
+            for (auto& callback : current->m_mouseCallbacks)
+            {
+                double xpos, ypos;
+                glfwGetCursorPos(window, &xpos, &ypos);
+
+                callback(static_cast<ButtonCode>(button), static_cast<Action>(action), static_cast<Modifier>(mods), xpos, current->m_height - ypos - 1.0);
+            }
         }
     }
 
     void OnScrollCallbackWrapper(GLFWwindow* window, double xoffset, double yoffset)
     {
-        Window* current = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
-
-        for (auto& callback : current->m_scrollCallbacks)
+        if (!ImGui::GetIO().WantCaptureMouse)
         {
-            current->m_xoffset = xoffset;
-            current->m_yoffset = yoffset;
-            callback(xoffset, yoffset);
+            Window* current = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
+
+            for (auto& callback : current->m_scrollCallbacks)
+            {
+                current->m_xoffset = xoffset;
+                current->m_yoffset = yoffset;
+                callback(xoffset, yoffset);
+            }
         }
     }
 
     void OnCursorCallbackWrapper(GLFWwindow* window, double xpos, double ypos)
     {
-        Window* current = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
-
-        for (auto& callback : current->m_cursorCallbacks)
+        if (!ImGui::GetIO().WantCaptureMouse)
         {
-            callback(xpos, current->m_height - ypos - 1.0);
+            Window* current = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
+
+            for (auto& callback : current->m_cursorCallbacks)
+            {
+                callback(xpos, current->m_height - ypos - 1.0);
+            }
         }
     }
 }

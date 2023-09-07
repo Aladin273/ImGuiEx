@@ -1,6 +1,6 @@
 ImguiEx::Window, imguiex.h, 
-Docking, separated, style, font
-Window, decorated, transparent
+Docking, separated, style, font, guizmo
+Window, decorated, transparent, color
 Settings, capture render, stb to texture
 Layer execute, while should xlose
-Event system, keycodes, want capture
+Event system, keycodes, want/unwant capture

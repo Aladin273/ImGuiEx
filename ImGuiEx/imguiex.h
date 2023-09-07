@@ -187,15 +187,20 @@ namespace ImGuiEx
         using ScrollCallback = std::function<void(double, double)>;
         using FramebufferSizeCallback = std::function<void(double, double)>;
 
-        Window(const std::string& title = "ImGuiEx", uint32_t width = 1280, uint32_t height = 800);
+        Window(const std::string& title = "ImGuiEx", uint32_t width = 1280, uint32_t height = 800, bool viewports = false, bool docking = false);
         virtual ~Window();
 
+        // Collect layers for further execution
         void PushLayer(Layer* layer);
-
+        // Executes all pushed layers in loop
         bool Execute();
+        // Executes one layer one time
         bool Execute(Layer* layer);
-
+        // Forcefully exits the application.
         void Close();
+
+        void Viewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+        void Clear(float r = 0.3f, float g = 0.3f, float b = 0.3f, float a = 1.0f);
 
         bool ShouldClose();
         void SwapBuffers();
@@ -230,6 +235,9 @@ namespace ImGuiEx
         std::string m_title = "ImGuiEx";
         uint32_t m_width = 1280;
         uint32_t m_height = 960;
+
+        bool m_viewports = false;
+        bool m_docking = false;
 
         bool m_running = true;
         double m_lastTime = 0.0;
